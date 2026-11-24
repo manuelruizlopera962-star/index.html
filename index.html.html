@@ -1,0 +1,1224 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mapa de Valencia</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;700&family=Source+Sans+3:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --mar: #1d5c78; --naranja: #e0832a; --cal: #faf8f3;
+    --tinta: #1a2a33; --suave: #5d6c74; --linea: #dcd8cc;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    font-family: "Source Sans 3", system-ui, sans-serif;
+    color: var(--tinta); background: var(--cal);
+    display: grid; grid-template-columns: clamp(380px, 32vw, 520px) 1fr;
+  }
+  aside {
+    display: flex; flex-direction: column; min-height: 0;
+    height: 100vh; height: 100dvh; border-right: 1px solid var(--linea);
+  }
+  header { padding: 20px 22px 12px; }
+  h1 { font-family: "Bricolage Grotesque", system-ui, sans-serif; font-size: 2rem; line-height: 1.05; margin: 0 0 6px; color: var(--mar); }
+  header p { margin: 0; color: var(--suave); }
+
+  .barra { display: flex; gap: 8px; padding: 0 22px 12px; }
+  .barra input[type="search"] {
+    flex: 1; min-width: 0; font: inherit; padding: 8px 12px;
+    border: 1px solid var(--linea); border-radius: 8px; background: #fff; color: var(--tinta);
+  }
+  .btn {
+    font: inherit; font-weight: 600; cursor: pointer; white-space: nowrap;
+    background: var(--naranja); color: #1a1208; border: 0; padding: 8px 14px; border-radius: 8px;
+  }
+  .btn.sec { background: #fff; color: var(--mar); border: 1px solid var(--mar); }
+  .btn.peligro { background: #fff; color: #a3262f; border: 1px solid #a3262f; }
+  .btn[aria-pressed="true"] { background: var(--mar); color: #fff; }
+  .ayuda { margin: 0 22px 10px; padding: 8px 12px; background: #fff3e2; border-radius: 8px; font-size: .95rem; }
+  .ayuda[hidden] { display: none; }
+
+  .filtros { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 22px 12px; }
+  .filtros button {
+    font: inherit; font-size: .9rem; cursor: pointer;
+    border: 1px solid var(--linea); background: #fff; color: var(--tinta);
+    padding: 5px 12px; border-radius: 999px;
+  }
+  .filtros button[aria-pressed="true"] { background: var(--mar); border-color: var(--mar); color: #fff; }
+
+  #lista { list-style: none; margin: 0; padding: 0; overflow-y: auto; flex: 1; border-top: 1px solid var(--linea); min-height: 80px; }
+  #lista li { border-bottom: 1px solid var(--linea); }
+  #lista li[hidden] { display: none; }
+  #lista li button {
+    display: flex; gap: 12px; align-items: center; width: 100%; text-align: left;
+    font: inherit; background: none; border: 0; cursor: pointer; padding: 12px 22px; color: inherit;
+  }
+  #lista li button:hover { background: #f1eee5; }
+  #lista li button[aria-current="true"] { background: #e9f0f2; }
+  .vacio { padding: 16px 22px; color: var(--suave); }
+  .dot { width: 12px; height: 12px; border-radius: 50%; flex: none; }
+  .nombre { font-weight: 600; display: block; }
+  .tipo { font-size: .85rem; color: var(--suave); }
+
+  details.copia { padding: 8px 22px; border-top: 1px solid var(--linea); font-size: .9rem; }
+  details.copia summary { cursor: pointer; color: var(--suave); }
+  details.copia div { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+  details.copia p { margin: 8px 0 0; color: var(--suave); line-height: 1.4; }
+
+  #detalle { border-top: 1px solid var(--linea); background: #fff; padding: 18px 22px 24px; flex: 1; min-height: 0; overflow-y: auto; }
+  #detalle[hidden] { display: none; }
+  #detalle h2 { font-family: "Bricolage Grotesque", sans-serif; font-size: 1.7rem; line-height: 1.15; margin: 0 0 4px; }
+  #detalle .tipo { margin-bottom: 8px; display: block; }
+  #detalle p { margin: 0 0 12px; font-size: 1.1rem; line-height: 1.6; }
+  #detalle dl { margin: 0 0 12px; display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; font-size: 1.05rem; }
+  #detalle dt { color: var(--suave); }
+  #detalle dd { margin: 0; }
+  .acciones { display: flex; flex-wrap: wrap; gap: 8px; }
+  .acciones a { text-decoration: none; display: inline-block; }
+  .foto { margin: 0 0 12px; }
+  .foto.cargando { height: 150px; border-radius: 8px; background: #e9f0f2; }
+  .foto img { width: 100%; max-height: 190px; object-fit: cover; border-radius: 8px; display: block; }
+  .foto figcaption { font-size: .8rem; color: var(--suave); margin-top: 4px; }
+
+  #mapa { height: 100vh; height: 100dvh; }
+  #mapa.modo-anadir, #mapa.modo-anadir .leaflet-grab { cursor: crosshair; }
+  .pin { width: 26px; height: 26px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.4); }
+  .pin.activo { width: 34px; height: 34px; }
+
+  dialog { border: 0; border-radius: 12px; padding: 22px; width: min(440px, 92vw); color: var(--tinta); font-family: inherit; }
+  dialog::backdrop { background: rgba(20, 30, 36, .5); }
+  dialog h2 { font-family: "Bricolage Grotesque", sans-serif; margin: 0 0 14px; color: var(--mar); }
+  dialog label { display: block; font-weight: 600; margin: 12px 0 4px; }
+  dialog input[type="text"], dialog select, dialog textarea {
+    width: 100%; font: inherit; padding: 8px 10px; border: 1px solid var(--linea); border-radius: 8px;
+  }
+  dialog textarea { min-height: 90px; resize: vertical; }
+  dialog .check { display: flex; gap: 8px; align-items: flex-start; font-weight: 400; }
+  dialog .check input { margin-top: 4px; }
+  dialog .botones { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+  .error { color: #a3262f; margin: 10px 0 0; }
+
+  button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, summary:focus-visible {
+    outline: 3px solid var(--naranja); outline-offset: 2px;
+  }
+
+  .btn.ancho { flex: 1; }
+  body.ficha .barra, body.ficha .ayuda, body.ficha .filtros, body.ficha #lista,
+  body.ficha details.copia, body.ficha .progreso, body.ficha header p { display: none !important; }
+  .volver { margin: 0 0 14px; }
+  header { position: relative; }
+  header h1 { padding-right: 56px; }
+  #tam { position: absolute; top: 18px; right: 18px; width: 42px; height: 38px; font: inherit; font-weight: 700;
+         cursor: pointer; background: #fff; color: var(--mar); border: 1px solid var(--mar); border-radius: 8px; }
+  .progreso { padding: 0 22px 12px; }
+  .barra-prog { height: 8px; background: var(--linea); border-radius: 999px; overflow: hidden; }
+  .barra-prog span { display: block; height: 100%; width: 0; background: #5b8a5f; transition: width .4s; }
+  .progreso p { margin: 6px 0 0; font-size: .9rem; color: var(--suave); }
+  body.jugando .progreso { display: none; }
+  .estado { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: .85rem; font-weight: 600; background: #e9f0f2; color: var(--mar); margin: 0 0 10px; }
+  .estado.pend { background: #fff3e2; color: #8a4b0d; }
+  .pin.pend { border-style: dashed; background-image: repeating-linear-gradient(45deg, rgba(255,255,255,.6) 0 4px, transparent 4px 8px); }
+  .check-op { display: flex; gap: 8px; align-items: flex-start; margin-top: 8px; }
+  .check-op input { margin-top: 3px; }
+  dialog .aviso-priv, dialog .ayuda-dlg { font-size: .9rem; color: var(--suave); margin: 10px 0 0; line-height: 1.4; }
+  body.jugando .barra, body.jugando .ayuda, body.jugando .filtros, body.jugando #lista,
+  body.jugando details.copia, body.jugando #detalle, body.jugando header p { display: none !important; }
+  #juego { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 22px 20px; border-top: 1px solid var(--linea); }
+  .juego-cab { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin: 12px 0; }
+  .juego-cab h2 { font-family: "Bricolage Grotesque", sans-serif; font-size: 1.3rem; margin: 0; color: var(--mar); }
+  #juego label { display: block; font-weight: 600; margin: 12px 0 4px; }
+  #juego select { width: 100%; font: inherit; padding: 8px 10px; border: 1px solid var(--linea); border-radius: 8px; background: #fff; }
+  #juego p { line-height: 1.5; }
+  #j-ajustes .btn { margin-top: 16px; }
+  .j-contador { color: var(--suave); font-weight: 600; margin: 4px 0 8px; }
+  #j-pistas { padding-left: 22px; margin: 0 0 12px; }
+  #j-pistas li { font-size: 1.15rem; line-height: 1.5; margin-bottom: 12px; animation: aparece .4s ease; }
+  @keyframes aparece { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+  .j-valor { color: var(--suave); margin: 0 0 10px; }
+  #j-resultado { margin-top: 16px; padding: 14px; background: #e9f0f2; border-radius: 10px; }
+  #j-resultado h3 { font-family: "Bricolage Grotesque", sans-serif; font-size: 1.4rem; margin: 0 0 6px; color: var(--mar); }
+  #j-dar { margin: 12px 0; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  #j-fin h3 { font-family: "Bricolage Grotesque", sans-serif; font-size: 1.4rem; color: var(--mar); }
+  #j-marcador { margin-top: 18px; display: grid; gap: 8px; }
+  .equipo { display: grid; grid-template-columns: 1fr auto auto auto; gap: 8px; align-items: center; padding: 8px 12px; background: #fff; border: 1px solid var(--linea); border-radius: 10px; }
+  .equipo strong { font-size: 1.3rem; min-width: 2ch; text-align: center; }
+  .equipo button { width: 34px; height: 34px; font-size: 1.2rem; cursor: pointer; border: 1px solid var(--linea); border-radius: 8px; background: #fff; }
+
+  @media (max-width: 800px) {
+    body { grid-template-columns: 1fr; grid-template-rows: 50dvh 50dvh; height: 100dvh; }
+    #mapa { order: -1; height: 100%; }
+    aside { height: 100%; border-right: 0; }
+    h1 { font-size: 1.5rem; }
+    header { padding-top: 12px; }
+    #detalle { padding: 14px 18px 20px; }
+    body.ficha header { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<aside>
+  <header>
+    <h1>Valencia, punto a punto</h1>
+    <button id="tam" type="button" aria-label="Cambiar el tamaño de la letra" title="Tamaño de letra">Aa</button>
+    <p>Toca un lugar para ver su ficha y completarla con tu equipo.</p>
+  </header>
+  <div class="progreso">
+    <div class="barra-prog" role="presentation"><span id="prog-barra"></span></div>
+    <p id="prog-texto"></p>
+  </div>
+  <div class="barra">
+    <button id="jugar" class="btn sec ancho" type="button">Jugar: adivina el sitio</button>
+  </div>
+  <div class="barra">
+    <input id="buscar" type="search" placeholder="Buscar un lugar" aria-label="Buscar un lugar">
+    <button id="anadir" class="btn" type="button" aria-pressed="false">Añadir un lugar</button>
+  </div>
+  <p id="ayuda" class="ayuda" role="status" hidden>Toca en el mapa el sitio exacto que quieres añadir.</p>
+  <div class="filtros" id="filtros" role="group" aria-label="Filtrar por categoría"></div>
+  <ul id="lista"></ul>
+  <details class="copia">
+    <summary>Copia de seguridad de los lugares añadidos</summary>
+    <p>Lo que añade y completa la clase se guarda solo en este navegador. Guarda una copia para llevarlo a otro ordenador o para juntar el trabajo de varios equipos.</p>
+    <div>
+      <button id="exportar" class="btn sec" type="button">Guardar copia</button>
+      <button id="importar" class="btn sec" type="button">Cargar copia</button>
+      <input id="archivo-copia" type="file" accept="application/json,.json" hidden>
+    </div>
+  </details>
+  <details class="copia">
+    <summary>Opciones del profesor</summary>
+    <label class="check-op"><input id="opt-ocultar" type="checkbox"> Ocultar la información de ejemplo hasta que la clase complete cada ficha</label>
+    <p>Así el alumnado empieza con los puntos marcados en el mapa y las fichas vacías.</p>
+    <div><button id="opt-reset" class="btn peligro" type="button">Borrar todo lo hecho por la clase</button></div>
+  </details>
+  <section id="detalle" hidden aria-live="polite"></section>
+
+  <section id="juego" hidden aria-label="Juego: adivina el sitio">
+    <div class="juego-cab">
+      <h2>Adivina el sitio</h2>
+      <button id="j-salir" class="btn sec" type="button">Salir</button>
+    </div>
+
+    <div id="j-ajustes">
+      <p>Los lugares desaparecen del mapa y solo quedan pistas. Cada pista nueva hace que el lugar valga menos puntos.</p>
+      <label for="j-cat">Jugar con</label>
+      <select id="j-cat"></select>
+      <label for="j-equipos">Equipos</label>
+      <select id="j-equipos">
+        <option value="0">Sin equipos</option>
+        <option value="2" selected>2 equipos</option>
+        <option value="3">3 equipos</option>
+        <option value="4">4 equipos</option>
+      </select>
+      <button id="j-empezar" class="btn" type="button">Empezar</button>
+    </div>
+
+    <div id="j-ronda" hidden>
+      <p id="j-contador" class="j-contador"></p>
+      <ol id="j-pistas" aria-live="polite"></ol>
+      <figure id="j-foto" class="foto" hidden></figure>
+      <p id="j-valor" class="j-valor"></p>
+      <div class="acciones">
+        <button id="j-otra" class="btn" type="button">Otra pista</button>
+        <button id="j-revelar" class="btn sec" type="button">Revelar</button>
+      </div>
+      <div id="j-resultado" hidden>
+        <h3 id="j-nombre"></h3>
+        <p id="j-texto"></p>
+        <div id="j-dar"></div>
+        <button id="j-siguiente" class="btn" type="button">Siguiente lugar</button>
+      </div>
+    </div>
+
+    <div id="j-fin" hidden>
+      <h3>¡Fin del juego!</h3>
+      <div id="j-final"></div>
+      <button id="j-repetir" class="btn" type="button">Jugar otra vez</button>
+    </div>
+
+    <div id="j-marcador"></div>
+  </section>
+</aside>
+
+<div id="mapa" role="application" aria-label="Mapa de Valencia"></div>
+
+<dialog id="dlg">
+  <h2>Nuevo lugar</h2>
+  <p class="ayuda-dlg">Solo hace falta el nombre. El resto lo puede completar la clase después.</p>
+  <form id="form" novalidate>
+    <label for="f-nombre">Nombre del lugar</label>
+    <input id="f-nombre" type="text" maxlength="80" required>
+
+    <label for="f-cat">Categoría</label>
+    <select id="f-cat"></select>
+
+    <label for="f-texto">¿Qué es y por qué es importante?</label>
+    <textarea id="f-texto" maxlength="600"></textarea>
+
+    <label for="f-zona">Barrio o zona (opcional)</label>
+    <input id="f-zona" type="text" maxlength="60">
+
+    <label for="f-foto">Foto (opcional)</label>
+    <input id="f-foto" type="file" accept="image/*">
+
+    <label for="f-pistas">Pistas para el juego (opcional, una por línea)</label>
+    <textarea id="f-pistas" placeholder="De la más difícil a la más fácil. No escribas el nombre del lugar."></textarea>
+
+    <label class="check"><input id="f-wiki" type="checkbox"> Si no subo foto, buscar una en Wikipedia con el nombre del lugar</label>
+
+    <p id="f-error" class="error" role="alert" hidden></p>
+    <div class="botones">
+      <button type="button" id="f-cancelar" class="btn sec">Cancelar</button>
+      <button type="submit" class="btn">Guardar lugar</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="dlg-ed">
+  <h2 id="ed-titulo">Completar ficha</h2>
+  <form id="form-ed" novalidate>
+    <label for="ed-equipo">Nombre del equipo</label>
+    <input id="ed-equipo" type="text" maxlength="40" placeholder="Por ejemplo: Los Exploradores">
+
+    <label for="ed-texto">¿Qué es y por qué es importante?</label>
+    <textarea id="ed-texto" maxlength="800"></textarea>
+
+    <label for="ed-zona">Barrio o zona</label>
+    <input id="ed-zona" type="text" maxlength="60">
+
+    <label for="ed-nota">Dato curioso o nota</label>
+    <input id="ed-nota" type="text" maxlength="120">
+
+    <label for="ed-pistas">Pistas para el juego (una por línea)</label>
+    <textarea id="ed-pistas" placeholder="De la más difícil a la más fácil. No escribáis el nombre del lugar."></textarea>
+
+    <label for="ed-foto">Foto</label>
+    <input id="ed-foto" type="file" accept="image/*">
+    <label class="check" id="ed-quitar-wrap" hidden><input id="ed-quitar" type="checkbox"> Quitar la foto actual</label>
+
+    <p class="aviso-priv">Usad solo el nombre del equipo, sin apellidos. No subáis fotos donde se vean caras sin permiso de las familias.</p>
+    <p id="ed-error" class="error" role="alert" hidden></p>
+    <div class="botones">
+      <button type="button" id="ed-cancelar" class="btn sec">Cancelar</button>
+      <button type="submit" class="btn">Guardar ficha</button>
+    </div>
+  </form>
+</dialog>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+  // ================= DATOS =================
+  const CATEGORIAS = {
+    monumentos: { nombre: "Monumentos", color: "#1d5c78" },
+    ocio:       { nombre: "Museos, ciencia y ocio", color: "#e0832a" },
+    naturaleza: { nombre: "Playa y naturaleza", color: "#5b8a5f" },
+    comida:     { nombre: "Mercados y barrios", color: "#b24a5a" },
+    barrio:     { nombre: "Nuestros lugares", color: "#8a4fb3" }
+  };
+
+  // "wiki" es el texto con el que se busca la foto en Wikipedia
+  const BASE = [
+    { nombre: "Catedral y Miguelete", cat: "monumentos", lat: 39.4756, lng: -0.3753, wiki: "Catedral de Valencia",
+      texto: "Catedral gótica con elementos románicos y barrocos. Su torre, el Miguelete, ofrece una de las mejores vistas del casco antiguo.",
+      dato: ["Plaza de la Reina", "Se puede subir a la torre"] },
+    { nombre: "Lonja de la Seda", cat: "monumentos", lat: 39.4742, lng: -0.3787, wiki: "Lonja de la Seda de Valencia",
+      texto: "Edificio gótico civil del siglo XV, donde se contrataba la seda. Es Patrimonio de la Humanidad de la UNESCO.",
+      dato: ["Calle de la Lonja", "Patrimonio UNESCO"] },
+    { nombre: "Torres de Serranos", cat: "monumentos", lat: 39.4800, lng: -0.3763, wiki: "Torres de Serranos",
+      texto: "Antigua puerta de entrada a la ciudad medieval. Desde lo alto se ve el cauce del Turia y el centro histórico.",
+      dato: ["Plaza de los Fueros", "Antigua muralla"] },
+    { nombre: "Torres de Quart", cat: "monumentos", lat: 39.4789, lng: -0.3836, wiki: "Torres de Quart",
+      texto: "Otra puerta de la muralla gótica. Todavía conserva marcas de los impactos de bala de cañón de la Guerra de la Independencia.",
+      dato: ["Calle de Quart", "Muralla cristiana"] },
+    { nombre: "Plaza del Ayuntamiento", cat: "monumentos", lat: 39.4699, lng: -0.3763, wiki: "Plaza del Ayuntamiento de Valencia",
+      texto: "Centro neurálgico de la ciudad. Aquí se celebran las mascletàs de las Fallas, y está rodeada del Ayuntamiento y Correos.",
+      dato: ["Centro", "Mascletàs en Fallas"] },
+    { nombre: "Estación del Norte", cat: "monumentos", lat: 39.4666, lng: -0.3774, wiki: "Estación del Norte Valencia",
+      texto: "Estación modernista de principios del siglo XX, decorada con cerámica y motivos de naranjos y la huerta valenciana.",
+      dato: ["Junto a la plaza de toros", "Modernismo valenciano"] },
+    { nombre: "Ciudad de las Artes y las Ciencias", cat: "ocio", lat: 39.4545, lng: -0.3500, wiki: "Ciudad de las Artes y las Ciencias",
+      texto: "Complejo diseñado por Santiago Calatrava y Félix Candela con museo de ciencias, planetario, ópera y espacios de ocio.",
+      dato: ["Final del Jardín del Turia", "Arquitectura contemporánea"] },
+    { nombre: "Oceanogràfic", cat: "ocio", lat: 39.4525, lng: -0.3480, wiki: "Oceanogràfic de Valencia",
+      texto: "Uno de los mayores acuarios de Europa, con recreaciones de distintos ecosistemas marinos.",
+      dato: ["Ciudad de las Artes y las Ciencias", "Ideal para familias"] },
+    { nombre: "Bioparc Valencia", cat: "ocio", lat: 39.4786, lng: -0.4075, wiki: "Bioparc Valencia",
+      texto: "Zoo de inmersión que recrea hábitats africanos sin rejas visibles entre visitantes y animales.",
+      dato: ["Parque de Cabecera", "Zoo de inmersión"] },
+    { nombre: "Jardín del Turia", cat: "naturaleza", lat: 39.4605, lng: -0.3657, wiki: "Jardín del Turia",
+      texto: "El antiguo cauce del río convertido en un parque de casi 9 km. Perfecto para pasear o ir en bici, con el Parque Gulliver como parada famosa.",
+      dato: ["Recorre toda la ciudad", "Paseo y bici"] },
+    { nombre: "Playa de la Malvarrosa", cat: "naturaleza", lat: 39.4777, lng: -0.3236, wiki: "Playa de la Malvarrosa",
+      texto: "La playa urbana más conocida, con un largo paseo marítimo y numerosos restaurantes donde probar el arroz.",
+      dato: ["Distrito marítimo", "Paseo marítimo"] },
+    { nombre: "Mercado Central", cat: "comida", lat: 39.4738, lng: -0.3790, wiki: "Mercado Central de Valencia",
+      texto: "Mercado modernista con más de 1.000 puestos de producto fresco. Un buen lugar para ver cómo come la ciudad.",
+      dato: ["Frente a la Lonja", "Mejor por la mañana"] },
+    { nombre: "Barrio del Carmen", cat: "comida", lat: 39.4785, lng: -0.3805, wiki: "El Carmen Valencia barrio",
+      texto: "El barrio más antiguo y bohemio: calles estrechas, murales, galerías, bares y terrazas.",
+      dato: ["Casco histórico", "Arte urbano y vida nocturna"] },
+    { nombre: "Plaza de la Virgen", cat: "comida", lat: 39.4753, lng: -0.3745, wiki: "Plaza de la Virgen Valencia",
+      texto: "Plaza histórica junto a la Catedral, con la Fuente del Turia y muchas terrazas.",
+      dato: ["Casco histórico", "Terrazas"] },
+    { nombre: "Parc Natural de l'Albufera", cat: "naturaleza", lat: 39.3300, lng: -0.3500, wiki: "Parque natural de la Albufera",
+      texto: "Gran laguna de agua dulce protegida como parque natural, rodeada de arrozales. Es famosa por sus paseos en barca al atardecer, por sus aves y por ser la tierra donde nació la paella valenciana.",
+      dato: ["Al sur de la ciudad", "Paseos en barca y atardeceres"] },
+    { nombre: "Museu de Belles Arts de València", cat: "ocio", lat: 39.4795, lng: -0.3695, wiki: "Museo de Bellas Artes de Valencia",
+      texto: "Una de las pinacotecas más importantes de España. Reúne pintura valenciana y obras de grandes artistas como Sorolla, Velázquez, El Greco o Goya, en un edificio del siglo XVII.",
+      dato: ["Junto a los Jardines del Real (Viveros)", "Conviene comprobar los horarios antes de ir"] },
+    { nombre: "Monument a Jaume I", cat: "monumentos", lat: 39.4719, lng: -0.3706, wiki: "Monumento a Jaime I Valencia",
+      texto: "Gran estatua ecuestre de bronce dedicada a Jaume I el Conquistador, el rey que conquistó Valencia en 1238. Se inauguró en 1891 en el jardín del Parterre.",
+      dato: ["Plaza de Alfonso el Magnánimo (Parterre)", "Inaugurada en 1891"] }
+  ];
+
+  // Pistas del juego, de la más difícil a la más fácil (la foto va al final)
+  const PISTAS = {
+    "Catedral y Miguelete": [
+      "Es un edificio religioso de estilo gótico, con partes románicas y barrocas.",
+      "Tiene una torre campanario muy alta desde la que se ve todo el centro histórico.",
+      "Una de sus puertas es el lugar donde cada jueves se reúne un tribunal de agricultores."],
+    "Lonja de la Seda": [
+      "Se construyó en el siglo XV, cuando Valencia era una gran potencia comercial del Mediterráneo.",
+      "Dentro hay una sala con columnas retorcidas como cuerdas, que parece un bosque de palmeras de piedra.",
+      "Aquí se compraba y vendía un tejido muy caro y brillante. Es Patrimonio de la Humanidad."],
+    "Torres de Serranos": [
+      "Antes era una puerta de entrada en la muralla: quien llegaba por el norte pasaba por aquí.",
+      "Son dos torres unidas por un cuerpo central con almenas. Desde arriba se ve el antiguo cauce de un río.",
+      "En otras épocas también sirvió de prisión. Hoy se puede subir a lo alto."],
+    "Torres de Quart": [
+      "También fue una puerta de la muralla medieval, pero está en el oeste de la ciudad.",
+      "En sus piedras todavía se ven agujeros redondos de los cañonazos que recibió hace más de 200 años.",
+      "Sus torres son más redondeadas que las de otras puertas famosas. Está cerca del barrio más bohemio."],
+    "Plaza del Ayuntamiento": [
+      "Es una plaza enorme con flores y fuentes, y un edificio de Correos con una gran cúpula de cristal.",
+      "En marzo, durante las Fallas, cada día a las dos de la tarde se oye aquí un estruendo de petardos.",
+      "Es el centro de la ciudad y alrededor está el edificio donde trabaja la alcaldía."],
+    "Estación del Norte": [
+      "Es un edificio de principios del siglo XX decorado con cerámica, naranjas y flores.",
+      "Parece un pequeño palacio modernista, pero por dentro hay andenes y vías.",
+      "Está pegada a la plaza de toros y a pocos pasos de la plaza del Ayuntamiento."],
+    "Ciudad de las Artes y las Ciencias": [
+      "Parece una ciudad del futuro: edificios blancos con formas que recuerdan un ojo, un esqueleto o un barco.",
+      "Dentro hay un museo de ciencias, un planetario y un gran edificio dedicado a la ópera.",
+      "Está al final de un parque larguísimo que antes fue un río. La diseñó el arquitecto Santiago Calatrava."],
+    "Oceanogràfic": [
+      "Aquí viven belugas, delfines, leones marinos y tiburones.",
+      "Cada zona del recinto representa un ambiente de agua distinto: mares, humedales, océanos, polos.",
+      "Está al lado de un conjunto de edificios futuristas, al final de un antiguo río."],
+    "Bioparc Valencia": [
+      "Aquí puedes ver elefantes, jirafas y lémures casi sin rejas.",
+      "Imita paisajes de otro continente para que los animales vivan parecido a su casa.",
+      "Está junto a un parque con un lago, al oeste de la ciudad, y es un zoo diferente a los de siempre."],
+    "Jardín del Turia": [
+      "Antes pasaba por aquí un río, pero tras una gran riada se desvió y quedó un cauce vacío.",
+      "Hoy es un parque larguísimo, de casi 9 km, para pasear o ir en bici casi sin cruzar calles.",
+      "En él hay una zona de juegos con un gigante enorme atado en el suelo, para subirse a su cuerpo."],
+    "Playa de la Malvarrosa": [
+      "Es un lugar donde el sol y la arena protagonizan los veranos de la ciudad.",
+      "Un pintor famoso de la luz mediterránea retrató aquí a familias y niños bañándose.",
+      "Tiene un paseo marítimo muy largo y muchos restaurantes donde comer arroz."],
+    "Mercado Central": [
+      "Aquí se vende cada día fruta, verdura, pescado y carne.",
+      "Es un edificio modernista de hierro, cristal y cerámica, con una gran cúpula.",
+      "Está justo enfrente de un edificio gótico donde antes se contrataba la seda."],
+    "Barrio del Carmen": [
+      "Sus calles son estrechas y están llenas de murales. No es fácil circular en coche.",
+      "Es una de las partes más antiguas de la ciudad, y conserva restos de la muralla.",
+      "De día tiene galerías de arte y por la noche se llena de bares y terrazas."],
+    "Plaza de la Virgen": [
+      "Tiene una fuente con un anciano que representa un río y ocho mujeres que representan sus acequias.",
+      "En marzo, durante las Fallas, miles de personas llegan aquí con flores para ofrecérselas a la patrona.",
+      "Está pegada a una gran catedral y a una basílica dedicada a la patrona de la ciudad."],
+    "Parc Natural de l'Albufera": [
+      "Es una gran laguna de agua dulce separada del mar por una franja de arena y pinos.",
+      "En sus alrededores se cultiva el arroz con el que se hace el plato más famoso de la región.",
+      "Se pueden dar paseos en barca al atardecer y viven en ella muchas aves. Está al sur de la ciudad."],
+    "Museu de Belles Arts de València": [
+      "Guarda cuadros de grandes maestros de la pintura española, como Sorolla, Velázquez, El Greco o Goya.",
+      "El edificio fue antes un colegio-seminario del siglo XVII.",
+      "Está junto a los jardines de los Viveros, al otro lado del antiguo río respecto al casco antiguo."],
+    "Monument a Jaume I": [
+      "Es una estatua de bronce que recuerda al rey que conquistó la ciudad en 1238.",
+      "Está en un pequeño jardín con una fuente, árboles y bancos, llamado Parterre.",
+      "El rey aparece montado a caballo sobre un gran pedestal de piedra, no lejos de la plaza del Ayuntamiento."]
+  };
+  BASE.forEach(l => { l.pistas = PISTAS[l.nombre]; });
+
+  // ================= ESTADO =================
+  const CLAVE = "valencia-lugares-usuario";
+  const CLAVE_ED = "valencia-ediciones";
+  const CLAVE_AJ = "valencia-ajustes";
+  const LUGARES = BASE.slice();
+  const vista = new Map();        // lugar -> { marker, li }
+  let activo = null;
+  let filtroActual = "todos";
+  let ocultarEjemplo = false;
+
+  const lista = document.getElementById("lista");
+  const detalle = document.getElementById("detalle");
+  const filtros = document.getElementById("filtros");
+  const cajaBuscar = document.getElementById("buscar");
+
+  const aviso = document.createElement("li");
+  aviso.className = "vacio";
+  aviso.textContent = "No hay lugares con esa búsqueda.";
+  aviso.hidden = true;
+  lista.appendChild(aviso);
+
+  // ================= MAPA =================
+  const map = L.map("mapa").setView([39.4699, -0.3763], 13);
+  const esri = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}", {
+    maxZoom: 19, attribution: "Tiles &copy; Esri"
+  }).addTo(map);
+  const osm = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 19, attribution: "&copy; <a href='https://www.openstreetmap.org/copyright'>OpenStreetMap</a>"
+  });
+  const controlCapas = L.control.layers({ "Esri calles": esri, "OpenStreetMap": osm }, null, { position: "topright" }).addTo(map);
+
+  function icono(cat, grande, pend) {
+    return L.divIcon({
+      className: "",
+      html: `<div class="pin ${grande ? "activo" : ""} ${pend ? "pend" : ""}" style="background-color:${CATEGORIAS[cat].color}"></div>`,
+      iconSize: grande ? [34, 34] : [26, 26],
+      iconAnchor: grande ? [17, 34] : [13, 26]
+    });
+  }
+
+  function slug(t) {
+    return t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  }
+
+  // ================= FOTOS (Wikipedia) =================
+  const cacheFotos = new Map();
+  async function buscarFoto(consulta) {
+    if (cacheFotos.has(consulta)) return cacheFotos.get(consulta);
+    let res = null;
+    try {
+      const url = "https://es.wikipedia.org/w/api.php?action=query&format=json&origin=*&generator=search&gsrlimit=2" +
+        "&prop=pageimages&piprop=thumbnail&pithumbsize=700&gsrsearch=" + encodeURIComponent(consulta);
+      const r = await fetch(url);
+      const d = await r.json();
+      const paginas = Object.values((d.query && d.query.pages) || {}).sort((a, b) => a.index - b.index);
+      const p = paginas.find(x => x.thumbnail);
+      if (p) res = { src: p.thumbnail.source, titulo: p.title };
+    } catch (e) { /* sin conexión o sin foto */ }
+    cacheFotos.set(consulta, res);
+    return res;
+  }
+
+  function ponerFoto(caja, src, nombre, tituloWiki) {
+    caja.classList.remove("cargando");
+    caja.innerHTML = "";
+    const img = document.createElement("img");
+    img.src = src;
+    img.alt = "Foto de " + nombre;
+    caja.appendChild(img);
+    if (tituloWiki) {
+      const cap = document.createElement("figcaption");
+      const a = document.createElement("a");
+      a.href = "https://es.wikipedia.org/wiki/" + encodeURIComponent(tituloWiki.replace(/ /g, "_"));
+      a.target = "_blank"; a.rel = "noopener";
+      a.textContent = "Wikipedia";
+      cap.append("Foto: ", a);
+      caja.appendChild(cap);
+    }
+  }
+
+  // ================= CREAR LUGARES EN EL MAPA Y LA LISTA =================
+  function crear(l) {
+    const marker = L.marker([l.lat, l.lng], { icon: iconoDe(l), title: l.nombre, alt: l.nombre })
+      .addTo(map).on("click", () => { if (!J.activo) seleccionar(l); });
+    const li = document.createElement("li");
+    li.innerHTML = `<button type="button"><span class="dot"></span><span><span class="nombre"></span><span class="tipo"></span></span></button>`;
+    li.querySelector(".dot").style.background = CATEGORIAS[l.cat].color;
+    li.querySelector(".nombre").textContent = l.nombre;
+    li.querySelector(".tipo").textContent = CATEGORIAS[l.cat].nombre + (pendiente(l) ? " · por completar" : "");
+    li.querySelector("button").addEventListener("click", () => seleccionar(l));
+    lista.insertBefore(li, aviso);
+    vista.set(l, { marker, li });
+  }
+
+  function seleccionar(l, sinMover) {
+    if (activo && vista.has(activo)) {
+      const va = vista.get(activo);
+      va.marker.setIcon(iconoDe(activo));
+      va.li.querySelector("button").removeAttribute("aria-current");
+    }
+    activo = l;
+    const v = vista.get(l);
+    v.marker.setIcon(iconoDe(l, true));
+    v.li.querySelector("button").setAttribute("aria-current", "true");
+    v.li.scrollIntoView({ block: "nearest" });
+    if (!sinMover) map.flyTo([l.lat, l.lng], Math.max(map.getZoom(), 15), { duration: 0.8 });
+
+    const pend = pendiente(l);
+    detalle.hidden = false;
+    detalle.innerHTML = "";
+    document.body.classList.add("ficha");
+    detalle.appendChild(mkBtn("← Volver a la lista", cerrarFicha, null, "btn sec volver"));
+    detalle.scrollTop = 0;
+
+    const caja = document.createElement("figure");
+    caja.className = "foto";
+    const h2 = document.createElement("h2"); h2.textContent = l.nombre;
+    const tipo = document.createElement("span"); tipo.className = "tipo"; tipo.textContent = CATEGORIAS[l.cat].nombre;
+    const estado = document.createElement("p");
+    estado.className = "estado" + (pend ? " pend" : "");
+    estado.textContent = pend ? "Por completar: ¡esta ficha os espera!"
+      : l.completado ? "Completada por " + (l.equipo || "la clase")
+      : "Ficha de ejemplo: ¡podéis mejorarla!";
+    detalle.append(caja, h2, tipo, estado);
+
+    const texto = document.createElement("p");
+    texto.textContent = pend
+      ? "Todavía no tiene información. Pulsad «Completar ficha» para escribir qué es, subir una foto y preparar pistas."
+      : l.texto;
+    detalle.appendChild(texto);
+
+    if (!pend) {
+      const dl = document.createElement("dl");
+      [["Zona", l.dato && l.dato[0]], ["Dato", l.dato && l.dato[1]]].forEach(([k, val]) => {
+        if (!val) return;
+        const dt = document.createElement("dt"); dt.textContent = k;
+        const dd = document.createElement("dd"); dd.textContent = val;
+        dl.append(dt, dd);
+      });
+      detalle.appendChild(dl);
+    }
+
+    // Foto
+    if (pend) {
+      caja.remove();
+    } else if (l.fotoData) {
+      ponerFoto(caja, l.fotoData, l.nombre, null);
+    } else if (l.wiki) {
+      caja.classList.add("cargando");
+      buscarFoto(l.wiki).then(f => {
+        if (activo !== l) return;
+        if (f) ponerFoto(caja, f.src, l.nombre, f.titulo); else caja.remove();
+      });
+    } else {
+      caja.remove();
+    }
+
+    // Botones
+    const acc = document.createElement("div");
+    acc.className = "acciones";
+    acc.appendChild(mkBtn(pend ? "Completar ficha" : (l.completado ? "Editar ficha" : "Mejorar ficha"),
+      () => abrirEdicion(l), null, "btn"));
+    const como = document.createElement("a");
+    como.className = "btn sec"; como.target = "_blank"; como.rel = "noopener";
+    como.textContent = "Cómo llegar";
+    como.href = `https://www.google.com/maps/search/?api=1&query=${l.lat},${l.lng}`;
+    acc.appendChild(como);
+    if (!pend && "speechSynthesis" in window) {
+      acc.appendChild(mkBtn("Escuchar", () => {
+        speechSynthesis.cancel();
+        const voz = new SpeechSynthesisUtterance(l.nombre + ". " + l.texto);
+        voz.lang = "es-ES";
+        speechSynthesis.speak(voz);
+      }, null, "btn sec"));
+    }
+    if (l.usuario) acc.appendChild(mkBtn("Eliminar este lugar", () => eliminar(l), null, "btn peligro"));
+    detalle.appendChild(acc);
+
+    history.replaceState(null, "", "#" + slug(l.nombre));
+  }
+
+  function slug(t) {
+    return t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  }
+
+  function cerrarFicha() {
+    const l = activo;
+    detalle.hidden = true;
+    document.body.classList.remove("ficha");
+    history.replaceState(null, "", location.pathname);
+    if (l && vista.has(l)) {
+      const v = vista.get(l);
+      v.marker.setIcon(iconoDe(l));
+      v.li.querySelector("button").removeAttribute("aria-current");
+      activo = null;
+      v.li.scrollIntoView({ block: "center" });
+    }
+  }
+
+  function eliminar(l) {
+    if (!confirm(`¿Eliminar "${l.nombre}"? No se puede deshacer.`)) return;
+    const v = vista.get(l);
+    v.marker.remove(); v.li.remove(); vista.delete(l);
+    LUGARES.splice(LUGARES.indexOf(l), 1);
+    actualizarProgreso();
+    activo = null;
+    detalle.hidden = true;
+    document.body.classList.remove("ficha");
+    history.replaceState(null, "", location.pathname);
+    guardar();
+  }
+
+  // ================= FILTROS Y BÚSQUEDA =================
+  const botonesFiltro = [];
+  function crearFiltro(clave, texto) {
+    const b = document.createElement("button");
+    b.type = "button"; b.textContent = texto; b.dataset.clave = clave;
+    b.setAttribute("aria-pressed", clave === filtroActual);
+    b.addEventListener("click", () => { filtroActual = clave; marcarFiltros(); aplicarFiltro(); });
+    filtros.appendChild(b); botonesFiltro.push(b);
+  }
+  function marcarFiltros() {
+    botonesFiltro.forEach(b => b.setAttribute("aria-pressed", b.dataset.clave === filtroActual));
+  }
+  crearFiltro("todos", "Todos");
+  crearFiltro("pendientes", "Por completar");
+  Object.entries(CATEGORIAS).forEach(([k, v]) => crearFiltro(k, v.nombre));
+
+  function aplicarFiltro() {
+    const q = slug(cajaBuscar.value).replace(/-/g, " ");
+    let visibles = 0;
+    LUGARES.forEach(l => {
+      const v = vista.get(l);
+      const ok = (filtroActual === "todos" || (filtroActual === "pendientes" ? !l.completado : l.cat === filtroActual)) &&
+                 (!q || slug(l.nombre).replace(/-/g, " ").includes(q));
+      v.li.hidden = !ok;
+      if (ok) { v.marker.addTo(map); visibles++; } else v.marker.remove();
+    });
+    aviso.hidden = visibles > 0;
+  }
+  cajaBuscar.addEventListener("input", aplicarFiltro);
+  function mostrarTodo() { filtroActual = "todos"; cajaBuscar.value = ""; marcarFiltros(); aplicarFiltro(); }
+
+  // ================= GUARDAR / CARGAR LUGARES AÑADIDOS =================
+  function datosUsuario() {
+    return LUGARES.filter(l => l.usuario);
+  }
+  function edicionesActuales() {
+    const ed = {};
+    LUGARES.filter(l => !l.usuario && l.completado).forEach(l => {
+      ed[slug(l.nombre)] = { texto: l.texto, dato: l.dato, pistas: l.pistas, fotoData: l.fotoData, equipo: l.equipo, completado: true };
+    });
+    return ed;
+  }
+  function guardar() {
+    try {
+      localStorage.setItem(CLAVE, JSON.stringify(datosUsuario()));
+      localStorage.setItem(CLAVE_ED, JSON.stringify(edicionesActuales()));
+      return true;
+    } catch (e) { return false; }
+  }
+  function cargarGuardados() {
+    try { ocultarEjemplo = localStorage.getItem(CLAVE_AJ) === "1"; } catch (e) {}
+    try {
+      const ed = JSON.parse(localStorage.getItem(CLAVE_ED) || "{}");
+      LUGARES.forEach(l => { if (ed[slug(l.nombre)]) Object.assign(l, ed[slug(l.nombre)]); });
+    } catch (e) { /* sin ediciones */ }
+    try {
+      const guardados = JSON.parse(localStorage.getItem(CLAVE) || "[]");
+      guardados.forEach(l => {
+        if (!CATEGORIAS[l.cat]) return;
+        if (l.completado === undefined) l.completado = !!l.texto && l.texto !== "Todavía no tiene descripción.";
+        LUGARES.push(l);
+      });
+    } catch (e) { /* sin datos guardados */ }
+  }
+
+  document.getElementById("exportar").addEventListener("click", () => {
+    const blob = new Blob([JSON.stringify({ version: 2, lugares: datosUsuario(), ediciones: edicionesActuales() }, null, 2)], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "lugares-valencia.json";
+    a.click();
+    URL.revokeObjectURL(a.href);
+  });
+  const archivoCopia = document.getElementById("archivo-copia");
+  document.getElementById("importar").addEventListener("click", () => archivoCopia.click());
+  archivoCopia.addEventListener("change", async () => {
+    const f = archivoCopia.files[0];
+    if (!f) return;
+    try {
+      const datos = JSON.parse(await f.text());
+      const lugares = Array.isArray(datos) ? datos : (datos.lugares || []);
+      const ed = Array.isArray(datos) ? {} : (datos.ediciones || {});
+      let nuevos = 0, completadas = 0;
+      lugares.forEach(l => {
+        if (!l || !l.nombre || !CATEGORIAS[l.cat] || typeof l.lat !== "number" || typeof l.lng !== "number") return;
+        if (l.id && LUGARES.some(x => x.id === l.id)) return;
+        l.usuario = true;
+        l.id = l.id || "u" + Date.now() + Math.random().toString(36).slice(2, 6);
+        l.dato = Array.isArray(l.dato) ? l.dato : ["Valencia", ""];
+        l.texto = l.texto || "";
+        if (l.completado === undefined) l.completado = !!l.texto;
+        LUGARES.push(l); crear(l); nuevos++;
+      });
+      LUGARES.forEach(l => {
+        if (l.usuario) return;
+        const e = ed[slug(l.nombre)];
+        if (e && e.completado) { Object.assign(l, e); completadas++; }
+      });
+      guardar(); refrescarTodo();
+      alert(nuevos + " lugares nuevos y " + completadas + " fichas completadas cargados.");
+    } catch (e) {
+      alert("No se pudo leer ese archivo. Usa un archivo guardado con «Guardar copia».");
+    }
+    archivoCopia.value = "";
+  });
+
+  // ================= AÑADIR UN LUGAR =================
+  const btnAnadir = document.getElementById("anadir");
+  const ayuda = document.getElementById("ayuda");
+  const mapaEl = document.getElementById("mapa");
+  const dlg = document.getElementById("dlg");
+  const form = document.getElementById("form");
+  const fError = document.getElementById("f-error");
+  const selCat = document.getElementById("f-cat");
+  let modoAnadir = false, temp = null, punto = null;
+
+  Object.entries(CATEGORIAS).forEach(([k, v]) => {
+    const o = document.createElement("option");
+    o.value = k; o.textContent = v.nombre;
+    if (k === "barrio") o.selected = true;
+    selCat.appendChild(o);
+  });
+
+  function modo(on) {
+    modoAnadir = on;
+    btnAnadir.setAttribute("aria-pressed", on);
+    btnAnadir.textContent = on ? "Cancelar" : "Añadir un lugar";
+    mapaEl.classList.toggle("modo-anadir", on);
+    ayuda.hidden = !on;
+    if (!on && temp) { temp.remove(); temp = null; }
+  }
+  btnAnadir.addEventListener("click", () => modo(!modoAnadir));
+
+  map.on("click", e => {
+    if (!modoAnadir) return;
+    punto = e.latlng;
+    if (temp) temp.remove();
+    temp = L.marker(punto, { icon: icono("barrio", true) }).addTo(map);
+    fError.hidden = true;
+    dlg.showModal();
+    document.getElementById("f-nombre").focus();
+  });
+
+  document.getElementById("f-cancelar").addEventListener("click", () => dlg.close());
+  dlg.addEventListener("close", () => { if (temp && modoAnadir) { temp.remove(); temp = null; } });
+
+  function reducirFoto(file) {
+    return new Promise((ok, ko) => {
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => {
+        const s = Math.min(1, 800 / Math.max(img.width, img.height));
+        const c = document.createElement("canvas");
+        c.width = Math.round(img.width * s); c.height = Math.round(img.height * s);
+        c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+        URL.revokeObjectURL(url);
+        ok(c.toDataURL("image/jpeg", 0.75));
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); ko(new Error("img")); };
+      img.src = url;
+    });
+  }
+
+  function errorForm(msg) { fError.textContent = msg; fError.hidden = false; }
+
+  form.addEventListener("submit", async e => {
+    e.preventDefault();
+    const nombre = document.getElementById("f-nombre").value.trim();
+    if (!nombre) { errorForm("Escribe el nombre del lugar."); return; }
+
+    const nuevo = {
+      id: "u" + Date.now(), usuario: true, nombre,
+      cat: selCat.value, lat: +punto.lat.toFixed(6), lng: +punto.lng.toFixed(6),
+      texto: document.getElementById("f-texto").value.trim(),
+      dato: [document.getElementById("f-zona").value.trim() || "Valencia", ""],
+      completado: false
+    };
+
+    const pistas = document.getElementById("f-pistas").value.split("\n").map(t => t.trim()).filter(Boolean);
+    if (pistas.length) nuevo.pistas = pistas;
+    nuevo.completado = !!nuevo.texto;
+
+    const fichero = document.getElementById("f-foto").files[0];
+    if (fichero) {
+      try { nuevo.fotoData = await reducirFoto(fichero); }
+      catch (err) { errorForm("No se pudo leer la foto. Prueba con un archivo JPG o PNG."); return; }
+    } else if (document.getElementById("f-wiki").checked) {
+      nuevo.wiki = nombre + " Valencia";
+    }
+
+    LUGARES.push(nuevo);
+    if (!guardar()) {
+      LUGARES.pop();
+      errorForm("No hay espacio para guardar. Prueba con una foto más pequeña o elimina algún lugar.");
+      return;
+    }
+    if (temp) { temp.remove(); temp = null; }
+    crear(nuevo);
+    actualizarProgreso();
+    form.reset(); selCat.value = "barrio";
+    dlg.close();
+    modo(false);
+    mostrarTodo();
+    seleccionar(nuevo);
+  });
+
+  // ================= JUEGO: ADIVINA EL SITIO =================
+  const $ = id => document.getElementById(id);
+  const J = { activo: false, equipos: [], pool: [], ronda: 0, total: 0, actual: null,
+              mostradas: 0, textos: [], fotoP: null, fotoVista: false, revelado: false, base: null };
+  const CENTRO = [39.4699, -0.3763];
+  const imagen = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
+    maxZoom: 19, attribution: "Tiles &copy; Esri"
+  });
+
+  function barajar(a) {
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+  }
+  function censurar(t, nombre) {
+    nombre.split(/\s+/).filter(w => w.length >= 4).forEach(w => {
+      t = t.replace(new RegExp(w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi"), "_____");
+    });
+    return t;
+  }
+  function textosPistas(l) {
+    if (l.pistas && l.pistas.length) return l.pistas;
+    return ["Es un lugar de la categoría: " + CATEGORIAS[l.cat].nombre + ".",
+            censurar(l.texto, l.nombre),
+            "Está en: " + l.dato[0] + "."];
+  }
+  function mkBtn(texto, fn, etiqueta, clase) {
+    const b = document.createElement("button");
+    b.type = "button"; b.textContent = texto;
+    if (clase) b.className = clase;
+    if (etiqueta) b.setAttribute("aria-label", etiqueta);
+    b.addEventListener("click", fn);
+    return b;
+  }
+
+  function entrarJuego() {
+    if (modoAnadir) modo(false);
+    if (activo && vista.has(activo)) {
+      vista.get(activo).marker.setIcon(iconoDe(activo));
+      vista.get(activo).li.querySelector("button").removeAttribute("aria-current");
+    }
+    activo = null;
+    detalle.hidden = true;
+    history.replaceState(null, "", location.pathname);
+    document.body.classList.remove("ficha");
+    document.body.classList.add("jugando");
+    LUGARES.forEach(l => vista.get(l).marker.remove());
+
+    // Mapa sin nombres de sitios para que no se vea la respuesta
+    J.base = map.hasLayer(osm) ? osm : esri;
+    map.removeLayer(J.base);
+    map.removeControl(controlCapas);
+    imagen.addTo(map);
+    map.flyTo(CENTRO, 12, { duration: 0.6 });
+
+    const sel = $("j-cat");
+    sel.innerHTML = "";
+    const todos = document.createElement("option");
+    todos.value = "todos"; todos.textContent = "Todos los lugares";
+    sel.appendChild(todos);
+    Object.entries(CATEGORIAS).forEach(([k, v]) => {
+      if (!LUGARES.some(l => l.cat === k && !pendiente(l))) return;
+      const o = document.createElement("option");
+      o.value = k; o.textContent = v.nombre;
+      sel.appendChild(o);
+    });
+
+    J.activo = true;
+    $("juego").hidden = false;
+    $("j-ajustes").hidden = false;
+    $("j-ronda").hidden = true;
+    $("j-fin").hidden = true;
+    $("j-marcador").innerHTML = "";
+  }
+
+  function salirJuego() {
+    J.activo = false;
+    document.body.classList.remove("jugando");
+    $("juego").hidden = true;
+    map.removeLayer(imagen);
+    J.base.addTo(map);
+    controlCapas.addTo(map);
+    LUGARES.forEach(l => vista.get(l).marker.setIcon(iconoDe(l)));
+    aplicarFiltro();
+    map.flyTo(CENTRO, 13, { duration: 0.6 });
+  }
+
+  function empezar() {
+    const cat = $("j-cat").value;
+    J.pool = LUGARES.filter(l => !pendiente(l) && (cat === "todos" || l.cat === cat));
+    if (!J.pool.length) { alert("Todavía no hay fichas completadas para jugar. ¡Completadlas primero!"); return; }
+    barajar(J.pool);
+    J.total = J.pool.length;
+    J.ronda = 0;
+    const n = +$("j-equipos").value;
+    J.equipos = Array.from({ length: n }, (_, i) => ({ nombre: "Equipo " + (i + 1), puntos: 0 }));
+    pintarMarcador();
+    $("j-ajustes").hidden = true;
+    $("j-fin").hidden = true;
+    siguienteRonda();
+  }
+
+  function siguienteRonda() {
+    if (J.ronda >= J.total) { fin(); return; }
+    LUGARES.forEach(x => { const v = vista.get(x); v.marker.remove(); v.marker.setIcon(iconoDe(x)); });
+    const l = J.pool[J.ronda++];
+    J.actual = l;
+    J.textos = textosPistas(l);
+    J.mostradas = 0; J.fotoVista = false; J.revelado = false;
+    J.fotoP = l.fotoData ? Promise.resolve({ src: l.fotoData }) : (l.wiki ? buscarFoto(l.wiki) : Promise.resolve(null));
+
+    $("j-ronda").hidden = false;
+    $("j-resultado").hidden = true;
+    $("j-pistas").innerHTML = "";
+    const foto = $("j-foto");
+    foto.hidden = true; foto.innerHTML = "";
+    $("j-contador").textContent = "Lugar " + J.ronda + " de " + J.total;
+    $("j-revelar").hidden = false;
+    $("j-valor").hidden = !J.equipos.length;
+    map.flyTo(CENTRO, 12, { duration: 0.6 });
+    mostrarPista();
+  }
+
+  function puntosAhora() { return Math.max(1, 5 - J.mostradas); }
+
+  function actualizarEstado() {
+    const quedan = J.mostradas < J.textos.length || !J.fotoVista;
+    $("j-otra").hidden = J.revelado || !quedan;
+    const p = puntosAhora();
+    $("j-valor").textContent = "Ahora vale " + p + (p === 1 ? " punto." : " puntos.");
+  }
+
+  async function mostrarPista() {
+    if (J.revelado) return;
+    const ronda = J.ronda;
+    if (J.mostradas < J.textos.length) {
+      const li = document.createElement("li");
+      li.textContent = J.textos[J.mostradas++];
+      $("j-pistas").appendChild(li);
+    } else if (!J.fotoVista) {
+      J.fotoVista = true;
+      $("j-otra").hidden = true;
+      const f = await J.fotoP;
+      if (ronda !== J.ronda || J.revelado) return;
+      if (f) {
+        J.mostradas++;
+        const foto = $("j-foto");
+        foto.innerHTML = "";
+        const img = document.createElement("img");
+        img.src = f.src;
+        img.alt = "Pista: foto del lugar";
+        foto.appendChild(img);
+        foto.hidden = false;
+      } else {
+        const li = document.createElement("li");
+        li.textContent = "No hay foto de este lugar. ¡Usad las pistas!";
+        $("j-pistas").appendChild(li);
+      }
+    }
+    actualizarEstado();
+  }
+
+  function revelar() {
+    if (J.revelado) return;
+    J.revelado = true;
+    const l = J.actual, v = vista.get(l);
+    v.marker.addTo(map);
+    v.marker.setIcon(iconoDe(l, true));
+    map.flyTo([l.lat, l.lng], 16, { duration: 0.9 });
+    $("j-nombre").textContent = l.nombre;
+    $("j-texto").textContent = l.texto;
+    $("j-otra").hidden = true;
+    $("j-revelar").hidden = true;
+    $("j-valor").hidden = true;
+
+    const dar = $("j-dar");
+    dar.innerHTML = "";
+    if (J.equipos.length) {
+      const pts = puntosAhora();
+      dar.append("Dar " + pts + (pts === 1 ? " punto a:" : " puntos a:"));
+      J.equipos.forEach(e => {
+        dar.appendChild(mkBtn(e.nombre, () => {
+          e.puntos += pts;
+          pintarMarcador();
+          dar.textContent = e.nombre + " gana " + pts + (pts === 1 ? " punto." : " puntos.");
+        }, null, "btn sec"));
+      });
+    }
+    $("j-siguiente").textContent = J.ronda >= J.total ? "Ver resultado final" : "Siguiente lugar";
+    $("j-resultado").hidden = false;
+  }
+
+  function pintarMarcador() {
+    const c = $("j-marcador");
+    c.innerHTML = "";
+    J.equipos.forEach(e => {
+      const d = document.createElement("div");
+      d.className = "equipo";
+      const n = document.createElement("span");
+      n.textContent = e.nombre;
+      const p = document.createElement("strong");
+      p.textContent = e.puntos;
+      d.append(n,
+        mkBtn("−", () => { e.puntos = Math.max(0, e.puntos - 1); pintarMarcador(); }, "Quitar un punto a " + e.nombre),
+        p,
+        mkBtn("+", () => { e.puntos++; pintarMarcador(); }, "Dar un punto a " + e.nombre));
+      c.appendChild(d);
+    });
+  }
+
+  function fin() {
+    LUGARES.forEach(x => vista.get(x).marker.remove());
+    map.flyTo(CENTRO, 12, { duration: 0.6 });
+    $("j-ronda").hidden = true;
+    $("j-fin").hidden = false;
+    const cont = $("j-final");
+    cont.innerHTML = "";
+    const p = document.createElement("p");
+    if (J.equipos.length) {
+      const orden = J.equipos.slice().sort((a, b) => b.puntos - a.puntos);
+      const mejor = orden[0].puntos;
+      const ganadores = orden.filter(e => e.puntos === mejor).map(e => e.nombre);
+      p.textContent = ganadores.length > 1
+        ? "Empate entre " + ganadores.join(" y ") + " con " + mejor + " puntos."
+        : "Gana " + ganadores[0] + " con " + mejor + " puntos.";
+    } else {
+      p.textContent = "Habéis visto los " + J.total + " lugares.";
+    }
+    cont.appendChild(p);
+  }
+
+  $("jugar").addEventListener("click", entrarJuego);
+  $("j-salir").addEventListener("click", salirJuego);
+  $("j-empezar").addEventListener("click", empezar);
+  $("j-otra").addEventListener("click", mostrarPista);
+  $("j-revelar").addEventListener("click", revelar);
+  $("j-siguiente").addEventListener("click", siguienteRonda);
+  $("j-repetir").addEventListener("click", () => {
+    $("j-fin").hidden = true;
+    $("j-ajustes").hidden = false;
+    $("j-marcador").innerHTML = "";
+  });
+
+  // ================= FICHAS COMPLETADAS POR LA CLASE =================
+  function pendiente(l) { return !l.completado && (l.usuario || ocultarEjemplo); }
+  function iconoDe(l, grande) { return icono(l.cat, grande, pendiente(l)); }
+
+  function refrescarLugar(l) {
+    const v = vista.get(l);
+    if (!v) return;
+    v.marker.setIcon(iconoDe(l, l === activo));
+    v.li.querySelector(".tipo").textContent = CATEGORIAS[l.cat].nombre + (pendiente(l) ? " · por completar" : "");
+  }
+  function actualizarProgreso() {
+    const total = LUGARES.length;
+    const ok = LUGARES.filter(l => l.completado).length;
+    $("prog-barra").style.width = (total ? ok / total * 100 : 0) + "%";
+    $("prog-texto").textContent = ok + " de " + total + " fichas completadas por la clase";
+  }
+  function refrescarTodo() {
+    LUGARES.forEach(refrescarLugar);
+    actualizarProgreso();
+    aplicarFiltro();
+    if (activo && !J.activo) seleccionar(activo, true);
+  }
+
+  $("opt-ocultar").addEventListener("change", e => {
+    ocultarEjemplo = e.target.checked;
+    try { localStorage.setItem(CLAVE_AJ, ocultarEjemplo ? "1" : "0"); } catch (err) {}
+    refrescarTodo();
+  });
+  $("opt-reset").addEventListener("click", () => {
+    if (!confirm("Se borrarán los lugares añadidos y todas las fichas completadas en este navegador. ¿Seguro?")) return;
+    try { [CLAVE, CLAVE_ED, CLAVE_AJ].forEach(k => localStorage.removeItem(k)); } catch (err) {}
+    history.replaceState(null, "", location.pathname);
+    location.reload();
+  });
+
+  const dlgEd = $("dlg-ed");
+  let editando = null;
+  function errorEd(m) { const e = $("ed-error"); e.textContent = m; e.hidden = false; }
+
+  function abrirEdicion(l) {
+    editando = l;
+    const pend = pendiente(l);
+    $("ed-titulo").textContent = (pend ? "Completar la ficha: " : "Editar la ficha: ") + l.nombre;
+    $("ed-equipo").value = l.equipo || "";
+    $("ed-texto").value = pend ? "" : (l.texto || "");
+    $("ed-zona").value = pend ? "" : ((l.dato && l.dato[0]) || "");
+    $("ed-nota").value = pend ? "" : ((l.dato && l.dato[1]) || "");
+    $("ed-pistas").value = pend ? "" : (l.pistas || []).join("\n");
+    $("ed-foto").value = "";
+    $("ed-quitar").checked = false;
+    $("ed-quitar-wrap").hidden = !l.fotoData;
+    $("ed-error").hidden = true;
+    dlgEd.showModal();
+    $("ed-texto").focus();
+  }
+  $("ed-cancelar").addEventListener("click", () => dlgEd.close());
+
+  $("form-ed").addEventListener("submit", async e => {
+    e.preventDefault();
+    const l = editando;
+    const texto = $("ed-texto").value.trim();
+    if (!texto) { errorEd("Escribe qué es el lugar y por qué es importante."); return; }
+
+    let fotoNueva;
+    const fichero = $("ed-foto").files[0];
+    if (fichero) {
+      try { fotoNueva = await reducirFoto(fichero); }
+      catch (err) { errorEd("No se pudo leer la foto. Prueba con un archivo JPG o PNG."); return; }
+    }
+
+    const antes = { texto: l.texto, dato: l.dato, pistas: l.pistas, fotoData: l.fotoData, equipo: l.equipo, completado: l.completado };
+    l.texto = texto;
+    l.dato = [$("ed-zona").value.trim() || "Valencia", $("ed-nota").value.trim()];
+    l.pistas = $("ed-pistas").value.split("\n").map(t => t.trim()).filter(Boolean);
+    l.equipo = $("ed-equipo").value.trim();
+    l.completado = true;
+    if (fotoNueva) l.fotoData = fotoNueva;
+    else if ($("ed-quitar").checked) delete l.fotoData;
+
+    if (!guardar()) {
+      Object.assign(l, antes);
+      if (antes.fotoData === undefined) delete l.fotoData;
+      errorEd("No hay espacio para guardar. Prueba con una foto más pequeña.");
+      return;
+    }
+    dlgEd.close();
+    refrescarTodo();
+    seleccionar(l, true);
+  });
+
+  // ================= ARRANQUE =================
+  cargarGuardados();
+  LUGARES.forEach(crear);
+  $("opt-ocultar").checked = ocultarEjemplo;
+  actualizarProgreso();
+
+  const TAMS = [100, 120, 140];
+  let tam = 0;
+  try { tam = Math.min(TAMS.length - 1, Math.max(0, +localStorage.getItem("valencia-tam") || 0)); } catch (e) {}
+  function aplicarTam() { document.documentElement.style.fontSize = TAMS[tam] + "%"; }
+  $("tam").addEventListener("click", () => {
+    tam = (tam + 1) % TAMS.length;
+    aplicarTam();
+    try { localStorage.setItem("valencia-tam", tam); } catch (e) {}
+  });
+  aplicarTam();
+  const inicial = LUGARES.find(l => slug(l.nombre) === location.hash.slice(1));
+  if (inicial) seleccionar(inicial);
+</script>
+</body>
+</html>
